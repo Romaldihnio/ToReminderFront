@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NoteFlow — Заметки с напоминаниями</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header__logo">
+        <img src="/images/1776946778964-019dba47-ae74-7d0b-a4f3-d5eb246bd476-Photoroom.png" alt="" class="logo-img">
+    </div>
+    <div class="header__actions">
+      <button class="btn btn--primary" id="addNoteBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Новая заметка
+      </button>
+    </div>
+  </header>
+
+  <!-- BOARD -->
+  <main class="board" id="board">
+
+    <!-- COLUMN: В ОЖИДАНИИ -->
+    <div class="column" id="col-pending" data-column="pending">
+      <div class="column__header" style="--col-color: #97d7c0;">
+        <div class="column__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h2 class="column__title">В ожидании</h2>
+        <span class="column__count" id="count-pending">0</span>
+      </div>
+      <div class="column__body" id="body-pending" data-column="pending">
+        <!-- notes here -->
+      </div>
+      <button class="column__add-btn" data-column="pending">+ Добавить заметку</button>
+    </div>
+
+    <!-- COLUMN: В РАБОТЕ -->
+    <div class="column" id="col-inprogress" data-column="inprogress">
+      <div class="column__header" style="--col-color: #76cbc3;">
+        <div class="column__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <h2 class="column__title">В работе</h2>
+        <span class="column__count" id="count-inprogress">0</span>
+      </div>
+      <div class="column__body" id="body-inprogress" data-column="inprogress">
+        <!-- notes here -->
+      </div>
+      <button class="column__add-btn" data-column="inprogress">+ Добавить заметку</button>
+    </div>
+
+    <!-- COLUMN: ГОТОВО -->
+    <div class="column" id="col-done" data-column="done">
+      <div class="column__header" style="--col-color: #5fbc4f;">
+        <div class="column__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h2 class="column__title">Готово</h2>
+        <span class="column__count" id="count-done">0</span>
+      </div>
+      <div class="column__body" id="body-done" data-column="done">
+        <!-- notes here -->
+      </div>
+      <button class="column__add-btn" data-column="done">+ Добавить заметку</button>
+    </div>
+
+    <!-- COLUMN: НА ПАУЗЕ -->
+    <div class="column" id="col-paused" data-column="paused">
+      <div class="column__header" style="--col-color: #b8e4d8;">
+        <div class="column__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        </div>
+        <h2 class="column__title">На паузе</h2>
+        <span class="column__count" id="count-paused">0</span>
+      </div>
+      <div class="column__body" id="body-paused" data-column="paused">
+        <!-- notes here -->
+      </div>
+      <button class="column__add-btn" data-column="paused">+ Добавить заметку</button>
+    </div>
+
+  </main>
+
+  <!-- TRASH ZONE -->
+  <div class="trash-zone" id="trashZone">
+    <div class="trash-zone__inner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6l-1 14H6L5 6"/>
+        <path d="M10 11v6M14 11v6"/>
+        <path d="M9 6V4h6v2"/>
+      </svg>
+      <span>Перетащите сюда для удаления</span>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD / EDIT NOTE -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal">
+      <div class="modal__header">
+        <h2 class="modal__title" id="modalTitle">Новая заметка</h2>
+        <button class="modal__close" id="modalClose">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal__body">
+        <div class="form-group">
+          <label class="form-label" for="noteTitle">Заголовок <span class="required">*</span></label>
+          <input class="form-input" type="text" id="noteTitle" placeholder="Введите заголовок заметки..." maxlength="80" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="noteText">Текст заметки</label>
+          <textarea class="form-textarea" id="noteText" placeholder="Опишите задачу подробнее..." rows="4"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="noteColumn">Колонка</label>
+            <select class="form-select" id="noteColumn">
+              <option value="pending">В ожидании</option>
+              <option value="inprogress">В работе</option>
+              <option value="done">Готово</option>
+              <option value="paused">На паузе</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="notePriority">Приоритет</label>
+            <select class="form-select" id="notePriority">
+              <option value="low">Низкий</option>
+              <option value="medium">Средний</option>
+              <option value="high">Высокий</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="noteReminder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:4px;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Напоминание
+          </label>
+          <input class="form-input" type="datetime-local" id="noteReminder" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="noteColor">Цвет карточки</label>
+          <div class="color-picker" id="colorPicker">
+            <button class="color-option color-option--white active" data-color="white" title="Белый"></button>
+            <button class="color-option color-option--green" data-color="green" title="Зелёный"></button>
+            <button class="color-option color-option--mint" data-color="mint" title="Мятный"></button>
+            <button class="color-option color-option--teal" data-color="teal" title="Бирюзовый"></button>
+            <button class="color-option color-option--yellow" data-color="yellow" title="Жёлтый"></button>
+          </div>
+        </div>
+      </div>
+      <div class="modal__footer">
+        <button class="btn btn--secondary" id="modalCancel">Отмена</button>
+        <button class="btn btn--primary" id="modalSave">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTIFICATION -->
+  <div class="notification-container" id="notificationContainer"></div>
+<script src="script.js"></script>
+</body>
+</html>
