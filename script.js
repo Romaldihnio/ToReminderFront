@@ -372,3 +372,4 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
       saveNotes();
       renderAll();
     }
+
