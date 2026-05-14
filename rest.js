@@ -14,7 +14,7 @@ const emptyCard = {
     createdAt: "",
   };
 
-  initialize()
+initialize()
 
 async function initialize() {
   if (!localStorage.getItem("token")) {
@@ -23,7 +23,7 @@ async function initialize() {
     token__input.value = localStorage.getItem("token");
     document.querySelector("#token__text").textContent = localStorage.getItem("token");
     document.querySelector("#project__text").textContent = await getProjectName(localStorage.getItem("token"))
-    getNotes(localStorage.getItem("token"))
+    await renderAll();
   }
   
 }
@@ -54,7 +54,7 @@ async function getProjectName(token){
   }
 }
 
-async function getNotes(token) {
+async function getNotes() {
   try {
     const response = await fetch(`http://${config.serverIp}:4200/api/tasks`, {
       method: "GET",
@@ -64,7 +64,7 @@ async function getNotes(token) {
     });
     let result = await response.json();
     console.log(result);
-    renderNotes(result);
+    return result
   } catch (error) {
     console.error("Ошибка прихода данных: " + error);
   }
@@ -105,25 +105,21 @@ newProject__btn.addEventListener("click", async function () {
     console.error("Ошибка при отправке данных: " + error.message);
   }
 });
-function renderNotes(data) {
-  const container = document.querySelector(".col-pending");
-  data.forEach((element) => {
-    const newCard = { ...emptyCard };
-    newCard.title = element.title;
-    renderAll(newCard);
-  });
-}
-function renderAll(notes) {
-  const columns = ["pending"];
+
+
+export async function renderAll() {
+    const notes = await getNotes()
+  const columns = ['pending', 'inprogress', 'done', 'paused'];
   columns.forEach((col) => {
     const body = document.getElementById("body-" + col);
     const count = document.getElementById("count-" + col);
-    const colNotes = notes.filter((n) => n.column === col);
+    const colNotes = notes.filter((n) => n.status === col);
     count.textContent = colNotes.length;
     body.innerHTML = "";
     colNotes.forEach((note) => {
       body.appendChild(script.createNoteElement(note));
     });
   });
-  setupReminderChecks();
 }
+
+

@@ -235,9 +235,9 @@ input, textarea, select {
   display: flex;
   gap: 20px;
   padding: 24px 28px;
-  flex-direction: column;
   overflow-x: auto;
-  align-items: center;
+  justify-content: center;
+  align-items: flex-start;
   min-height: calc(100vh - 90px);
 }
 
