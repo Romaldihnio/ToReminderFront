@@ -1,5 +1,6 @@
 const token__input = document.querySelector("#token__input")
 const savetoken__btn = document.querySelector("#savetoken__btn")
+const newProject__btn = document.querySelector("#addProjecBtn")
 if(localStorage.getItem("token") == ''){
    alert("Нет токена!")
 }else{
@@ -27,3 +28,7 @@ async function getNotes(token) {
         console.error("Ошибка прихода данных: " + error)
     }
 }
+
+newProject__btn.addEventListener("click", async function name(params) {
+    //Создание проекта на сервере
+})
