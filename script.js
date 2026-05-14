@@ -30,7 +30,7 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
       setupReminderChecks();
     }
 
-    function createNoteElement(note) {
+    export function createNoteElement(note) {
       const card = document.createElement('div');
       card.className = `note note--${note.color || 'white'} note--${note.priority || 'low'}-priority`;
       card.dataset.id = note.id;
@@ -372,6 +372,3 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
       saveNotes();
       renderAll();
     }
-module.exports = {
-  createNoteElement
-}

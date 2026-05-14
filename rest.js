@@ -1,7 +1,9 @@
+import * as config from "./config.js"
+import * as script from "./script.js"
 const token__input = document.querySelector("#token__input")
 const savetoken__btn = document.querySelector("#savetoken__btn")
 const newProject__btn = document.querySelector("#addProjecBtn")
-if(localStorage.getItem("token") == ''){
+if(localStorage.getItem("token") == ''){}
 
 const emptyCard =  { id: '', title: '', text: '', column: '', priority: '', color: '', reminder: '', createdAt: '' }
 if(!localStorage.getItem("token") || localStorage.getItem("token") == null){
@@ -25,7 +27,7 @@ function loadPage(){
 }
 async function getNotes(token) {
     try {
-      const response = await fetch(`http://192.168.1.106:4200/api/tasks`,{
+      const response = await fetch(`http://${config.serverIp}:4200/api/tasks`,{
         method: 'GET',
         headers:{
             'Authorization': `${localStorage.getItem("token")}`
@@ -41,7 +43,23 @@ async function getNotes(token) {
 }
 
 newProject__btn.addEventListener("click", async function name(params) {
-    //Создание проекта на сервере
+    const projectName = document.querySelector("#project__input").value
+    console.log(projectName)
+
+    try {
+      const response = await fetch(`http://${config.serverIp}:4200/api/projects`,{
+        method: 'POST',
+        headers:{},
+        body:{
+            "name": `${projectName}`
+        }
+      }  
+      )
+    let result = await response.json()
+    console.log(result)
+    } catch (error) {
+        console.error("Ошибка прихода данных: " + error)
+    }
 })
 function renderNotes(data){
     const container = document.querySelector(".col-pending")
@@ -61,7 +79,7 @@ function renderAll(notes) {
         count.textContent = colNotes.length;
         body.innerHTML = '';
         colNotes.forEach(note => {
-          body.appendChild(createNoteElement(note));
+          body.appendChild(script.createNoteElement(note));
         });
       });
       setupReminderChecks();
