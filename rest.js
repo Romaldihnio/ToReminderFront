@@ -91,7 +91,7 @@ newProject__btn.addEventListener("click", async function () {
       },
     );
 
-    if (!response.ok) {
+    if (!response.ok ) {
       throw new Error(`Ошибка сервера: ${response.status}`);
     }
 
