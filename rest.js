@@ -19,13 +19,23 @@ initialize()
 async function initialize() {
   if (!localStorage.getItem("token")) {
     alert("Нет токена!");
-  } else {
-    token__input.value = localStorage.getItem("token");
-    document.querySelector("#token__text").textContent = localStorage.getItem("token");
-    document.querySelector("#project__text").textContent = await getProjectName(localStorage.getItem("token"))
-    await renderAll();
+    return; // Сразу выходим, чтобы не выполнять ветку else
   }
-  
+
+  try {
+    const token = localStorage.getItem("token");
+    
+    token__input.value = token;
+    document.querySelector("#token__text").textContent = token;
+    
+    // Параллельно или последовательно загружаем данные с сервера
+    document.querySelector("#project__text").textContent = await getProjectName(token);
+    
+    await renderAll();
+  } catch (error) {
+    console.error("Критическая ошибка при инициализации:", error);
+    alert("Не удалось загрузить данные с сервера. Проверьте соединение.");
+  }
 }
 
 savetoken__btn.addEventListener("click", function () {

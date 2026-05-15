@@ -8,30 +8,9 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
     let reminderTimers = {};
     let selectedColor = 'white';
 
-    function saveNotes() {
-      localStorage.setItem('noteflow_notes', JSON.stringify(notes));
-    }
 
     function generateId() {
       return 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-    }
-
-    // =============================================
-    //  RENDER
-    // =============================================
-    function renderAll(notes) {
-      const columns = ['pending', 'inprogress', 'done', 'paused'];
-      columns.forEach(col => {
-        const body = document.getElementById('body-' + col);
-        const count = document.getElementById('count-' + col);
-        const colNotes = notes.filter(n => n.column === col);
-        count.textContent = colNotes.length;
-        body.innerHTML = '';
-        colNotes.forEach(note => {
-          body.appendChild(createNoteElement(note));
-        });
-      });
-      setupReminderChecks();
     }
 
     
@@ -75,12 +54,12 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
           body.classList.remove('column__body--dragover');
         }
       });
-      body.addEventListener('drop', e => {
+      body.addEventListener('drop',async e => {
         e.preventDefault();
         body.classList.remove('column__body--dragover');
         const targetColumn = body.dataset.column;
         if (draggedNoteId) {
-          moveNoteToColumn(draggedNoteId, targetColumn);
+          await moveNoteToColumn(draggedNoteId, targetColumn);
         }
       });
     });
@@ -97,35 +76,26 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
         trashZone.classList.remove('trash-zone--active');
       }
     });
-    trashZone.addEventListener('drop', e => {
+    trashZone.addEventListener('drop', async e => {
       e.preventDefault();
       trashZone.classList.remove('trash-zone--active', 'trash-zone--visible');
       if (draggedNoteId) {
-        deleteNote(draggedNoteId);
+        await deleteNote(draggedNoteId);
         showNotification('Заметка удалена', 'error');
       }
     });
 
-    function moveNoteToColumn(id, column) {
+    async function moveNoteToColumn(id, column) {
       const note = notes.find(n => n.id === id);
       if (note && note.column !== column) {
         note.column = column;
-        saveNotes();
-        renderAll();
+        await rest.renderAll();
         const columnNames = { pending: 'В ожидании', inprogress: 'В работе', done: 'Готово', paused: 'На паузе' };
         showNotification(`Заметка перемещена в «${columnNames[column]}»`, 'success');
       }
     }
 
-    function deleteNote(id) {
-      notes = notes.filter(n => n.id !== id);
-      if (reminderTimers[id]) {
-        clearTimeout(reminderTimers[id]);
-        delete reminderTimers[id];
-      }
-      saveNotes();
-      renderAll();
-    }
+   
 
     // =============================================
     //  MODAL
@@ -214,27 +184,6 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
       if (e.key === 'Escape') closeModal();
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote();
     });
-
-    // =============================================
-    //  INIT
-    // =============================================
-
-    // Demo notes if empty
-    if (notes.length === 0) {
-      const demoNotes = [
-        { id: generateId(), title: 'Изучить новый фреймворк', text: 'Посмотреть документацию и туториалы по Vue 3', column: 'pending', priority: 'high', color: 'white', reminder: '', createdAt: Date.now() - 86400000 },
-        { id: generateId(), title: 'Дизайн главной страницы', text: 'Нарисовать wireframe и согласовать с командой', column: 'inprogress', priority: 'medium', color: 'mint', reminder: '', createdAt: Date.now() - 3600000 },
-        { id: generateId(), title: 'Настроить CI/CD', text: 'GitHub Actions для автодеплоя', column: 'inprogress', priority: 'high', color: 'teal', reminder: '', createdAt: Date.now() - 7200000 },
-        { id: generateId(), title: 'Написать тесты', text: 'Unit-тесты для основных компонентов', column: 'done', priority: 'medium', color: 'green', reminder: '', createdAt: Date.now() - 172800000 },
-        { id: generateId(), title: 'Обновить зависимости', text: '', column: 'paused', priority: 'low', color: 'yellow', reminder: '', createdAt: Date.now() - 259200000 },
-      ];
-      notes = demoNotes;
-      saveNotes();
-      renderAll();
-    }
-
-
-
 
   //Обновлено
 
@@ -340,14 +289,40 @@ export function createNoteElement(note) {
 
       // Action buttons
       card.querySelectorAll('[data-action]').forEach(btn => {
-        btn.addEventListener('click', e => {
+        btn.addEventListener('click',async e => {
           e.stopPropagation();
           const action = btn.dataset.action;
           const id = btn.dataset.id;
           if (action === 'edit') openEditModal(id);
-          if (action === 'delete') deleteNote(id);
+          if (action === 'delete') await deleteNote(id);
         });
       });
 
       return card;
     }
+
+    async function deleteNote(id) {
+  // 1. Фильтруем локальный массив (если он ещё используется)
+  notes = notes.filter(n => n.id !== id);
+
+  try {
+    // 2. Добавляем const перед response, чтобы объявить переменную
+    const response = await fetch(`http://${config.serverIp}:4200/api/tasks/delete/?id=${id}`, {
+      method: 'GET', // Обратите внимание: обычно для удаления используют метод DELETE, но если ваше API требует GET — оставляйте так
+      headers: { 
+        Authorization: `${localStorage.getItem("token")}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Не удалось удалить заметку на сервере');
+    }
+
+    // 3. Дожидаемся обновления интерфейса
+    await rest.renderAll(); 
+    
+  } catch (error) {
+    console.error("Ошибка при удалении:", error);
+    alert("Произошла ошибка при удалении заметки.");
+  }
+}
