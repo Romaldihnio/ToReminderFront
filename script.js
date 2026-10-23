@@ -1,13 +1,8 @@
-
-import * as config from "./config.js";
-import * as rest from "./rest.js";
-
-let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
+let notes = [];
     let editingId = null;
     let draggedNoteId = null;
     let reminderTimers = {};
     let selectedColor = 'white';
-
 
     function generateId() {
       return 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
@@ -80,22 +75,44 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
       e.preventDefault();
       trashZone.classList.remove('trash-zone--active', 'trash-zone--visible');
       if (draggedNoteId) {
-        await deleteNote(draggedNoteId);
-        showNotification('Заметка удалена', 'error');
+        deleteNote(draggedNoteId);
       }
     });
 
-    async function moveNoteToColumn(id, column) {
-      const note = notes.find(n => n.id === id);
+    function findNote(id) {
+      return notes.find(n => String(n.id) === String(id));
+    }
+
+    function moveNoteToColumn(id, column) {
+      const note = findNote(id);
       if (note && note.column !== column) {
+        const prevColumn = note.column;
         note.column = column;
-        await rest.renderAll();
+        renderAll();
         const columnNames = { pending: 'В ожидании', inprogress: 'В работе', done: 'Готово', paused: 'На паузе' };
         showNotification(`Заметка перемещена в «${columnNames[column]}»`, 'success');
+        updateNoteOnServer(note.id, note).catch(error => {
+          showNotification('Ошибка синхронизации: ' + error.message, 'error');
+          note.column = prevColumn;
+          renderAll();
+        });
       }
     }
 
-   
+    async function deleteNote(id) {
+      try {
+        await deleteNoteOnServer(id);
+        notes = notes.filter(n => String(n.id) !== String(id));
+        if (reminderTimers[id]) {
+          clearTimeout(reminderTimers[id]);
+          delete reminderTimers[id];
+        }
+        renderAll();
+        showNotification('Заметка удалена', 'error');
+      } catch (error) {
+        showNotification('Не удалось удалить заметку: ' + error.message, 'error');
+      }
+    }
 
     // =============================================
     //  MODAL
@@ -113,7 +130,7 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
     }
 
     function openEditModal(id) {
-      const note = notes.find(n => n.id === id);
+      const note = findNote(id);
       if (!note) return;
       editingId = id;
       document.getElementById('modalTitle').textContent = 'Редактировать заметку';
@@ -130,9 +147,96 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
       editingId = null;
     }
 
-  
+    function setColorOption(color) {
+      document.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
+      const opt = document.querySelector(`[data-color="${color}"]`);
+      if (opt) opt.classList.add('active');
+      selectedColor = color;
+    }
 
-  
+    document.getElementById('colorPicker').addEventListener('click', e => {
+      const btn = e.target.closest('.color-option');
+      if (btn) setColorOption(btn.dataset.color);
+    });
+
+    async function saveNote() {
+      const title = document.getElementById('noteTitle').value.trim();
+      if (!title) {
+        document.getElementById('noteTitle').classList.add('form-input--error');
+        document.getElementById('noteTitle').focus();
+        return;
+      }
+      document.getElementById('noteTitle').classList.remove('form-input--error');
+
+      const data = {
+        title,
+        text: document.getElementById('noteText').value.trim(),
+        column: document.getElementById('noteColumn').value,
+        priority: document.getElementById('notePriority').value,
+        reminder: document.getElementById('noteReminder').value,
+        color: selectedColor,
+      };
+
+      if (editingId) {
+        const note = findNote(editingId);
+        if (note) {
+          const prev = { ...note };
+          Object.assign(note, data);
+          renderAll();
+          closeModal();
+          showNotification('Заметка обновлена', 'success');
+          try {
+            const serverNote = await updateNoteOnServer(note.id, note);
+            Object.assign(note, serverNote);
+            renderAll();
+          } catch (error) {
+            showNotification('Ошибка синхронизации: ' + error.message, 'error');
+            Object.assign(note, prev);
+            renderAll();
+          }
+        }
+      } else {
+        const newNote = { id: generateId(), createdAt: Date.now(), ...data };
+        notes.push(newNote);
+        renderAll();
+        closeModal();
+        showNotification('Заметка создана', 'success');
+        try {
+          const serverNote = await createNoteOnServer(data);
+          const i = notes.findIndex(n => n.id === newNote.id);
+          if (i !== -1) notes[i] = serverNote;
+          renderAll();
+        } catch (error) {
+          showNotification('Ошибка синхронизации: ' + error.message, 'error');
+          notes = notes.filter(n => n.id !== newNote.id);
+          renderAll();
+        }
+      }
+    }
+
+    // =============================================
+    //  REMINDER CHECKS
+    // =============================================
+    function setupReminderChecks() {
+      Object.values(reminderTimers).forEach(t => clearTimeout(t));
+      reminderTimers = {};
+      notes.forEach(note => {
+        if (!note.reminder) return;
+        const t = new Date(note.reminder).getTime() - Date.now();
+        if (t > 0 && t < 86400000 * 7) {
+          reminderTimers[note.id] = setTimeout(() => {
+            showReminderAlert(note);
+          }, t);
+        }
+      });
+    }
+
+    function showReminderAlert(note) {
+      showNotification(`⏰ Напоминание: «${note.title}»`, 'reminder', 8000);
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('NoteFlow — Напоминание', { body: note.title, icon: '' });
+      }
+    }
 
     // Request notification permission
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -185,144 +289,20 @@ let notes = JSON.parse(localStorage.getItem('noteflow_notes') || '[]');
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') saveNote();
     });
 
-  //Обновлено
+    // =============================================
+    //  INIT
+    // =============================================
+    renderAll();
 
-    export async function saveNote() {
-  const title = document.getElementById('noteTitle').value.trim();
-  
-  // 1. Валидация (остается на клиенте для скорости)
-  if (!title) {
-    document.getElementById('noteTitle').classList.add('form-input--error');
-    document.getElementById('noteTitle').focus();
-    return;
-  }
-  document.getElementById('noteTitle').classList.remove('form-input--error');
-
-  // 2. Сбор данных
-  const data = {
-    title : document.getElementById('noteTitle').value.trim(),
-    description: document.getElementById('noteText').value.trim(),
-    status: document.getElementById('noteColumn').value,
-    priority: document.getElementById('notePriority').value,
-  };
-
-  try {
-    let response;
-    
-    if (editingId) {
-      // 3а. Обновление существующей заметки (PUT или PATCH)
-      response = await fetch(`http://${config.serverIp}:4200/api/tasks`, {
-        method: 'PUT',
-        headers: { 
-          'content-type': 'application/json',
-          Authorization: `${localStorage.getItem("token")}`,
-         },
-        body: JSON.stringify(data),
-      });
-    } else {
-      // 3б. Создание новой заметки (POST)
-      response = await fetch(`http://${config.serverIp}:4200/api/tasks`, {
-        method: 'POST',
-        headers: { 
-          'content-type': 'application/json',
-          Authorization: `${localStorage.getItem("token")}`,
-         },
-        body: JSON.stringify(data),
-      });
+    // Demo notes only when project token is not set (backend not connected yet)
+    if (!localStorage.getItem('token') && notes.length === 0) {
+      const demoNotes = [
+        { id: generateId(), title: 'Изучить новый фреймворк', text: 'Посмотреть документацию и туториалы по Vue 3', column: 'pending', priority: 'high', color: 'white', reminder: '', createdAt: Date.now() - 86400000 },
+        { id: generateId(), title: 'Дизайн главной страницы', text: 'Нарисовать wireframe и согласовать с командой', column: 'inprogress', priority: 'medium', color: 'mint', reminder: '', createdAt: Date.now() - 3600000 },
+        { id: generateId(), title: 'Настроить CI/CD', text: 'GitHub Actions для автодеплоя', column: 'inprogress', priority: 'high', color: 'teal', reminder: '', createdAt: Date.now() - 7200000 },
+        { id: generateId(), title: 'Написать тесты', text: 'Unit-тесты для основных компонентов', column: 'done', priority: 'medium', color: 'green', reminder: '', createdAt: Date.now() - 172800000 },
+        { id: generateId(), title: 'Обновить зависимости', text: '', column: 'paused', priority: 'low', color: 'yellow', reminder: '', createdAt: Date.now() - 259200000 },
+      ];
+      notes = demoNotes;
+      renderAll();
     }
-
-    if (!response.ok) throw new Error('Ошибка при сохранении на сервере');
-
-    const result = await response.json();
-
-    // 4. Локальное обновление состояния (необязательно, если renderAll делает новый запрос)
-    showNotification(
-      editingId ? 'Заметка обновлена' : 'Заметка создана', 
-      'success'
-    );
-
-    // 5. Завершение
-    await rest.renderAll(); // В идеале renderAll теперь тоже асинхронный и тянет данные с сервера
-    closeModal();
-    
-  } catch (error) {
-    console.error(error);
-    showNotification('Ошибка связи с сервером', 'error');
-  }
-}
-
-export function createNoteElement(note) {
-      const card = document.createElement('div');
-      card.className = `note note--${note.color || 'white'} note--${note.priority || 'low'}-priority`;
-      card.dataset.id = note.id;
-      card.draggable = true;
-
-
-      const priorityLabel = { low: 'Низкий', medium: 'Средний', high: 'Высокий' }[note.priority || 'low'];
-
-      card.innerHTML = `
-        <div class="note__drag-handle">
-          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>
-        </div>
-        <div class="note__priority-bar"></div>
-        <div class="note__content">
-          <div class="note__top">
-            <span class="note__priority-badge note__priority-badge--${note.priority || 'low'}">${priorityLabel}</span>
-            <div class="note__actions">
-              <button class="note__action-btn" data-action="edit" data-id="${note.id}" title="Редактировать">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              </button>
-              <button class="note__action-btn note__action-btn--delete" data-action="delete" data-id="${note.id}" title="Удалить">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-              </button>
-            </div>
-          </div>
-          <h3 class="note__title">${escapeHtml(note.title)}</h3>
-          ${note.description ? `<p class="note__text">${escapeHtml(note.description)}</p>` : ''}
-          
-        </div>
-      `;
-
-      // Drag events
-      card.addEventListener('dragstart', onDragStart);
-      card.addEventListener('dragend', onDragEnd);
-
-      // Action buttons
-      card.querySelectorAll('[data-action]').forEach(btn => {
-        btn.addEventListener('click',async e => {
-          e.stopPropagation();
-          const action = btn.dataset.action;
-          const id = btn.dataset.id;
-          if (action === 'edit') openEditModal(id);
-          if (action === 'delete') await deleteNote(id);
-        });
-      });
-
-      return card;
-    }
-
-    async function deleteNote(id) {
-  // 1. Фильтруем локальный массив (если он ещё используется)
-  notes = notes.filter(n => n.id !== id);
-
-  try {
-    // 2. Добавляем const перед response, чтобы объявить переменную
-    const response = await fetch(`http://${config.serverIp}:4200/api/tasks/delete/?id=${id}`, {
-      method: 'GET', // Обратите внимание: обычно для удаления используют метод DELETE, но если ваше API требует GET — оставляйте так
-      headers: { 
-        Authorization: `${localStorage.getItem("token")}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Не удалось удалить заметку на сервере');
-    }
-
-    // 3. Дожидаемся обновления интерфейса
-    await rest.renderAll(); 
-    
-  } catch (error) {
-    console.error("Ошибка при удалении:", error);
-    alert("Произошла ошибка при удалении заметки.");
-  }
-}
